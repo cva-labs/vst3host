@@ -245,7 +245,7 @@ bool AudioEngine::loadAudioFile(const juce::File& file, juce::String& error)
     readerSource = std::move(nextSource);
     currentAudioFile = file;
     midiFileLoaded = false;
-    currentMidiFile = {};
+    currentMidiFile = juce::File();
     hostTempoBpm = 120.0;
     hostTimeSigNumerator = 4;
     hostTimeSigDenominator = 4;
@@ -337,7 +337,7 @@ bool AudioEngine::loadMidiFile(const juce::File& file, juce::String& error)
     transport.stop();
     transport.setSource(nullptr);
     readerSource.reset();
-    currentAudioFile = {};
+    currentAudioFile = juce::File();
     midiSequence = std::move(combined);
     midiLength = juce::jmax(midiSequence.getEndTime(), calculatedLoopLength);
     hostTempoBpm = initialTempoBpm;

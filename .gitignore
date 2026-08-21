@@ -5,6 +5,10 @@
 /.vs/
 /.DS_Store
 /.git-upload/
+/.gh-cli-config/
+/.gh-cli-cache/
+/.localappdata/
+/.gitconfig-upload
 *.user
 *.suo
 plugin-diagnostic.log
