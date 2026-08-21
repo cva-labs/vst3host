@@ -1,88 +1,86 @@
 # VST3 Player Host
 
-Standalone VST3 host/audio και MIDI player για Windows και macOS, βασισμένο στο JUCE.
+VST3 Player Host is a standalone audio and MIDI player for Windows and macOS, developed by CVA Labs with JUCE.
 
-## Λειτουργίες
+## Features
 
-- Φόρτωση και drag-and-drop αρχείων WAV/MP3/MIDI
-- Play, pause, stop, seek και repeat/loop
-- Output gain
-- Τέσσερα σειριακά VST3 effect/instrument inserts και virtual MIDI keyboard
-- Bypass, clear και άνοιγμα native/generic plugin editor
-- Live stereo input μέσω ASIO στα Windows ή CoreAudio στο macOS
-- Mono input sum προς τα δύο output channels
-- Stereo input/output peak meters με latched overload indicator
-- Ενιαία preset library με drop-down ονομάτων, plugin paths, πλήρες plugin state και bypass ανά insert
+- WAV, MP3, MID and MIDI file loading with drag and drop
+- Play, pause, stop, seek and repeat
+- Live audio input through ASIO on Windows and CoreAudio on macOS
+- Hardware MIDI input and an on-screen MIDI keyboard
+- Mono input option
+- Four serial VST3 effect or instrument inserts
+- Native plug-in editors, bypass and clear controls
+- Manufacturer-grouped VST3 browser with instruments highlighted separately
+- Full scan and scan-new-only modes with a persistent plug-in cache
+- Named rack presets containing plug-ins, plug-in states, source settings and audio-device settings
+- Stereo input/output meters with overload indicators
+- Resizable interface with automatic display fitting
 
-Όλα τα named presets αποθηκεύονται στο ίδιο αρχείο:
-`%APPDATA%/CVA Labs/VST3 Player Host/preset-library.json`. Επιλογή ονόματος από το drop-down
-φορτώνει άμεσα ολόκληρο το rack. Το **Save preset** προσθέτει νέο preset ή
-ενημερώνει το υπάρχον όταν χρησιμοποιηθεί το ίδιο όνομα. Το **Delete** ζητά
-επιβεβαίωση και αφαιρεί το επιλεγμένο preset.
+## Signal Flow
 
-Κάθε preset αποθηκεύει επίσης την πηγή: διαδρομή του φορτωμένου MP3/WAV ή
-Live Input, πλήρες audio-device/ASIO setup (driver, κανάλια, sample rate και
-buffer size), Mono, Repeat και output gain. Το αρχείο ήχου δεν ενσωματώνεται
-μέσα στη library· πρέπει να παραμένει στην αποθηκευμένη διαδρομή.
+Audio playback or live input:
 
-Σε κάθε insert, το μεγάλο πεδίο εμφανίζει το όνομα του plugin και ανοίγει τον
-editor του με click. Το διπλανό drop-down φορτώνει ή αντικαθιστά το VST3.
-Η εφαρμογή σαρώνει σε background τις τυπικές τοποθεσίες VST3 και ομαδοποιεί
-τα διαθέσιμα effect plugins ανά manufacturer/company. Το **Rescan VST3**
-ανανεώνει χειροκίνητα τη λίστα. Η σάρωση γίνεται σε απομονωμένες child
-processes, ώστε ένα ελαττωματικό plugin να μην κρασάρει τον host. Το αποτέλεσμα
-αποθηκεύεται στο `%APPDATA%/CVA Labs/VST3 Player Host/vst3-cache.json`, οπότε μετά την πρώτη
-σάρωση οι λίστες εμφανίζονται άμεσα.
-Τα stereo INPUT/OUTPUT meters βρίσκονται δεξιά και λειτουργούν κατακόρυφα.
+`Audio source → Insert 1 → Insert 2 → Insert 3 → Insert 4 → Output`
 
-Η αλυσίδα σήματος είναι είτε
-`Audio file -> Insert 1 -> Insert 2 -> Insert 3 -> Insert 4 -> Audio output`
-είτε
-`Live input -> Insert 1 -> Insert 2 -> Insert 3 -> Insert 4 -> Audio output`.
+MIDI playback or live MIDI input:
 
-## Build (Windows)
+`MIDI source → VST3 instrument → following inserts → Output`
 
-Απαιτούνται Visual Studio 2022 ή 2026 με το workload **Desktop development with C++**, Git και CMake 3.22+.
+## Presets and Settings
+
+Windows data is stored under:
+
+`%APPDATA%\CVA Labs\VST3 Player Host`
+
+macOS data is stored in the corresponding JUCE application-data location under the current user account.
+
+The application remembers the selected audio driver/device, sample rate, buffer size, channel configuration and enabled MIDI inputs.
+
+## Build for Windows
+
+Requirements:
+
+- Windows 10 or later
+- Visual Studio 2022 or newer with **Desktop development with C++**
+- Git
+- CMake 3.22 or newer
 
 ```powershell
 .\build-windows.ps1
 ```
 
-Το executable δημιουργείται συνήθως στο:
+Expected output:
 
 `build/VST3PlayerHost_artefacts/Release/VST3 Player Host.exe`
 
-Στο πρώτο configure το CMake κατεβάζει το JUCE 8.0.10 και τα headers του ASIO SDK.
-Η χρήση/διανομή τους διέπεται από τις αντίστοιχες άδειες. Ειδικά το ASIO SDK
-διατίθεται με επιλογή GPLv3 ή proprietary άδειας Steinberg· έλεγξε και επίλεξε
-την κατάλληλη άδεια πριν διανείμεις binary.
+## Build for macOS Universal
 
-## Χρήση
+Requirements:
 
-1. Πάτησε **Load audio** ή σύρε ένα WAV/MP3 στο παράθυρο.
-2. Πάτησε **Load VST3** σε κάθε insert και επίλεξε το `.vst3` αρχείο του plugin.
-3. Πάτησε **Editor** για το UI του plugin.
-4. Πάτησε **Play**.
-
-Για live ήχο, άνοιξε **Audio settings**, επίλεξε `ASIO` και τον driver της
-κάρτας ήχου, ενεργοποίησε τα επιθυμητά input/output channels και μετά πάτησε
-**Live input**. Χρησιμοποίησε ακουστικά ή χαμήλωσε τα monitors για αποφυγή feedback.
-Ενεργοποίησε **Mono** για να γίνει `(Input L + Input R) / 2` και να σταλεί το
-ίδιο σήμα και στα δύο κανάλια πριν από τα inserts.
-
-Η εφαρμογή υποστηρίζει effects, instruments, MIDI input/MIDI files και αποθήκευση plugin state στα presets.
-
-## Build (macOS Universal)
-
-Απαιτούνται macOS 11+, Xcode Command Line Tools, Git και CMake 3.22+.
+- macOS 11 or later
+- Xcode Command Line Tools
+- Git
+- CMake 3.22 or newer
 
 ```bash
 chmod +x build-macos.sh
 ./build-macos.sh
 ```
 
-Παράγεται Universal εφαρμογή για Apple Silicon και Intel στο
-`VST3-Player-Host-macOS-Universal.zip`. Το GitHub Actions workflow
-`.github/workflows/build-macos.yml` εκτελεί το ίδιο build χωρίς να απαιτείται φυσικό Mac.
-Το artifact είναι ad-hoc signed, όχι notarized. Για δημόσια διανομή απαιτείται
-Apple Developer ID και notarization.
+The script produces `VST3-Player-Host-macOS-Universal.zip` for both Apple Silicon and Intel Macs.
+
+## Automated Builds
+
+GitHub Actions builds both platforms automatically after every push to `main`:
+
+- **Build Windows x64** produces a ZIP containing `VST3 Player Host.exe`.
+- **Build macOS Universal** produces an ad-hoc-signed Universal `.app` ZIP.
+
+Open the repository's **Actions** page, select a successful run and download the artifact from the bottom of the run page.
+
+The macOS artifact is not notarized. On first launch, macOS may require right-clicking the application and selecting **Open**.
+
+## Licensing Notice
+
+This project uses JUCE 8 and the Steinberg ASIO SDK. Before distributing binaries, choose and comply with the applicable JUCE and ASIO licensing terms. Publishing this repository does not by itself select or grant a licence for the CVA Labs source code.

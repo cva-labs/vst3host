@@ -1,0 +1,33 @@
+name: Build Windows x64
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure x64 application
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build Release
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Package application
+        shell: pwsh
+        run: |
+          $output = "build/VST3PlayerHost_artefacts/Release/VST3 Player Host.exe"
+          if (-not (Test-Path -LiteralPath $output)) { throw "Application was not generated: $output" }
+          Compress-Archive -LiteralPath $output -DestinationPath "VST3-Player-Host-Windows-x64.zip" -Force
+
+      - name: Upload Windows application
+        uses: actions/upload-artifact@v4
+        with:
+          name: VST3-Player-Host-Windows-x64
+          path: VST3-Player-Host-Windows-x64.zip
+          if-no-files-found: error
