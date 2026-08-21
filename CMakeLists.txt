@@ -18,7 +18,7 @@ if (WIN32)
     FetchContent_Declare(
         ASIOSDK
         GIT_REPOSITORY https://github.com/audiosdk/asio.git
-        GIT_TAG main
+        GIT_TAG 496a0765b8bb9c26f764f22f9a9712a937177db2
         GIT_SHALLOW TRUE)
     FetchContent_MakeAvailable(ASIOSDK)
 endif()
