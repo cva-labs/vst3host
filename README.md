@@ -81,6 +81,10 @@ Open the repository's **Actions** page, select a successful run and download the
 
 The macOS artifact is not notarized. On first launch, macOS may require right-clicking the application and selecting **Open**.
 
-## Licensing Notice
+## Licence
 
-This project uses JUCE 8 and the Steinberg ASIO SDK. Before distributing binaries, choose and comply with the applicable JUCE and ASIO licensing terms. Publishing this repository does not by itself select or grant a licence for the CVA Labs source code.
+Copyright (C) 2026 CVA Labs.
+
+VST3 Player Host is free software licensed under the **GNU Affero General Public License v3.0**. See [LICENSE](LICENSE).
+
+The project uses JUCE 8 under AGPLv3 and the Steinberg ASIO SDK under GPLv3. GPLv3 and AGPLv3 code may be combined as expressly permitted by both licences; the combined application is distributed under AGPLv3. Distributions of the executable must be accompanied by access to the complete corresponding source code and build scripts.

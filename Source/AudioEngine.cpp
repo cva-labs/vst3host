@@ -1,3 +1,4 @@
+// Copyright (C) 2026 CVA Labs. SPDX-License-Identifier: AGPL-3.0-only
 #include "AudioEngine.h"
 
 namespace
