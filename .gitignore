@@ -1,0 +1,10 @@
+/build/
+/build-macos/
+/work/
+/outputs/
+/.vs/
+/.DS_Store
+/.git-upload/
+*.user
+*.suo
+plugin-diagnostic.log

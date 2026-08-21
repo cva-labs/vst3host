@@ -1,0 +1,35 @@
+name: Build macOS Universal
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Universal app
+        run: |
+          cmake -S . -B build-macos -G Xcode \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Build Release
+        run: cmake --build build-macos --config Release --parallel 4
+
+      - name: Ad-hoc sign and package
+        run: |
+          APP="build-macos/VST3PlayerHost_artefacts/Release/VST3 Player Host.app"
+          codesign --force --deep --sign - "$APP"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" VST3-Player-Host-macOS-Universal.zip
+
+      - name: Upload macOS application
+        uses: actions/upload-artifact@v4
+        with:
+          name: VST3-Player-Host-macOS-Universal
+          path: VST3-Player-Host-macOS-Universal.zip
+          if-no-files-found: error
