@@ -1,8 +1,147 @@
 // Copyright (C) 2026 CVA Labs. SPDX-License-Identifier: AGPL-3.0-only
 #include "AudioEngine.h"
 
+#if JUCE_WINDOWS
+ #include <mfapi.h>
+ #include <mfidl.h>
+ #include <mfreadwrite.h>
+ #include <wrl/client.h>
+#endif
+
 namespace
 {
+#if JUCE_WINDOWS
+class MediaFoundationAudioReader final : public juce::AudioFormatReader
+{
+public:
+    explicit MediaFoundationAudioReader(const juce::File& source)
+        : juce::AudioFormatReader(nullptr, "Windows Media Foundation")
+    {
+        const auto comResult = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        const bool uninitialiseCom = SUCCEEDED(comResult);
+
+        if (FAILED(MFStartup(MF_VERSION)))
+        {
+            if (uninitialiseCom) CoUninitialize();
+            return;
+        }
+
+        Microsoft::WRL::ComPtr<IMFSourceReader> sourceReader;
+        auto pathToOpen = source;
+        std::unique_ptr<juce::TemporaryFile> correctedExtension;
+
+        // Media Foundation sometimes chooses its byte-stream handler from the
+        // extension. Give a disguised MP4/AAC file a truthful temporary suffix.
+        juce::FileInputStream headerStream(source);
+        char header[12] {};
+        const bool isIsoMedia = headerStream.openedOk()
+                             && headerStream.read(header, sizeof(header)) == sizeof(header)
+                             && std::memcmp(header + 4, "ftyp", 4) == 0;
+        if (isIsoMedia && !source.hasFileExtension("m4a;mp4;aac"))
+        {
+            correctedExtension = std::make_unique<juce::TemporaryFile>(".m4a");
+            if (source.copyFileTo(correctedExtension->getFile()))
+                pathToOpen = correctedExtension->getFile();
+        }
+
+        HRESULT result = MFCreateSourceReaderFromURL(pathToOpen.getFullPathName().toWideCharPointer(),
+                                                     nullptr, sourceReader.GetAddressOf());
+        if (SUCCEEDED(result))
+        {
+            Microsoft::WRL::ComPtr<IMFMediaType> requestedType;
+            result = MFCreateMediaType(requestedType.GetAddressOf());
+            if (SUCCEEDED(result)) result = requestedType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
+            if (SUCCEEDED(result)) result = requestedType->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_PCM);
+            if (SUCCEEDED(result))
+                result = sourceReader->SetCurrentMediaType((DWORD) MF_SOURCE_READER_FIRST_AUDIO_STREAM,
+                                                           nullptr, requestedType.Get());
+        }
+
+        Microsoft::WRL::ComPtr<IMFMediaType> actualType;
+        if (SUCCEEDED(result))
+            result = sourceReader->GetCurrentMediaType((DWORD) MF_SOURCE_READER_FIRST_AUDIO_STREAM,
+                                                       actualType.GetAddressOf());
+
+        UINT32 rate = 0, channels = 0, bitDepth = 0;
+        if (SUCCEEDED(result)) result = MFGetAttributeUINT32(actualType.Get(), MF_MT_AUDIO_SAMPLES_PER_SECOND, 0) != 0 ? S_OK : E_FAIL;
+        if (SUCCEEDED(result)) rate = MFGetAttributeUINT32(actualType.Get(), MF_MT_AUDIO_SAMPLES_PER_SECOND, 0);
+        if (SUCCEEDED(result)) channels = MFGetAttributeUINT32(actualType.Get(), MF_MT_AUDIO_NUM_CHANNELS, 0);
+        if (SUCCEEDED(result)) bitDepth = MFGetAttributeUINT32(actualType.Get(), MF_MT_AUDIO_BITS_PER_SAMPLE, 16);
+        if (rate == 0 || channels == 0 || bitDepth != 16) result = E_FAIL;
+
+        while (SUCCEEDED(result))
+        {
+            DWORD flags = 0;
+            Microsoft::WRL::ComPtr<IMFSample> sample;
+            result = sourceReader->ReadSample((DWORD) MF_SOURCE_READER_FIRST_AUDIO_STREAM, 0, nullptr,
+                                              &flags, nullptr, sample.GetAddressOf());
+            if (FAILED(result) || (flags & MF_SOURCE_READERF_ENDOFSTREAM) != 0) break;
+            if (sample == nullptr) continue;
+
+            Microsoft::WRL::ComPtr<IMFMediaBuffer> buffer;
+            result = sample->ConvertToContiguousBuffer(buffer.GetAddressOf());
+            BYTE* bytes = nullptr;
+            DWORD byteCount = 0;
+            if (SUCCEEDED(result)) result = buffer->Lock(&bytes, nullptr, &byteCount);
+            if (SUCCEEDED(result))
+            {
+                const auto oldSize = pcm.size();
+                pcm.resize(oldSize + byteCount / sizeof(int16_t));
+                std::memcpy(pcm.data() + oldSize, bytes, byteCount);
+                buffer->Unlock();
+            }
+        }
+
+        MFShutdown();
+        if (uninitialiseCom) CoUninitialize();
+
+        if (rate > 0 && channels > 0 && !pcm.empty())
+        {
+            sampleRate = rate;
+            numChannels = channels;
+            bitsPerSample = 16;
+            usesFloatingPointData = false;
+            lengthInSamples = (juce::int64) (pcm.size() / channels);
+        }
+    }
+
+    bool isValid() const { return sampleRate > 0 && numChannels > 0 && lengthInSamples > 0; }
+
+    bool readSamples(int* const* destinations, int destinationChannels, int destinationOffset,
+                     juce::int64 startSample, int samplesToRead) override
+    {
+        clearSamplesBeyondAvailableLength(destinations, destinationChannels, destinationOffset,
+                                          startSample, samplesToRead, lengthInSamples);
+        const int available = (int) juce::jlimit<juce::int64>(0, samplesToRead,
+                                                              lengthInSamples - startSample);
+        for (int channel = 0; channel < destinationChannels; ++channel)
+        {
+            auto* destination = destinations[channel];
+            if (destination == nullptr) continue;
+            destination += destinationOffset;
+            if (channel >= (int) numChannels)
+            {
+                std::fill(destination, destination + available, 0);
+                continue;
+            }
+            for (int sample = 0; sample < available; ++sample)
+                destination[sample] = (int) ((juce::uint32) pcm[(size_t) (startSample + sample) * numChannels
+                                                               + (size_t) channel] << 16);
+        }
+        return true;
+    }
+
+private:
+    std::vector<int16_t> pcm;
+};
+
+std::unique_ptr<juce::AudioFormatReader> createMediaFoundationReader(const juce::File& file)
+{
+    auto reader = std::make_unique<MediaFoundationAudioReader>(file);
+    return reader->isValid() ? std::unique_ptr<juce::AudioFormatReader>(reader.release()) : nullptr;
+}
+#endif
+
 void writePluginDiagnostic(const juce::String& message)
 {
     const auto file = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
@@ -233,9 +372,27 @@ void AudioEngine::getNextAudioBlock(const juce::AudioSourceChannelInfo& info)
 bool AudioEngine::loadAudioFile(const juce::File& file, juce::String& error)
 {
     auto reader = std::unique_ptr<juce::AudioFormatReader>(formatManager.createReaderFor(file));
+
+#if JUCE_USE_MP3AUDIOFORMAT
+    // Retry MP3 files with the decoder directly. This also handles files whose
+    // metadata/header prevents AudioFormatManager from identifying the format.
+    if (reader == nullptr && file.hasFileExtension("mp3"))
+    {
+        juce::MP3AudioFormat mp3Format;
+        reader.reset(mp3Format.createReaderFor(new juce::FileInputStream(file), true));
+    }
+#endif
+
+#if JUCE_WINDOWS
+    if (reader == nullptr)
+        reader = createMediaFoundationReader(file);
+#endif
+
     if (reader == nullptr)
     {
-        error = "Δεν ήταν δυνατή η ανάγνωση του αρχείου. Επίλεξε WAV ή MP3.";
+        error = file.existsAsFile()
+                    ? "Could not decode this audio file. It may be damaged or not contain valid MP3/WAV audio."
+                    : "The selected audio file no longer exists or cannot be accessed.";
         return false;
     }
 
@@ -261,7 +418,7 @@ bool AudioEngine::loadMidiFile(const juce::File& file, juce::String& error)
     juce::MidiFile parsed;
     if (!input.openedOk() || !parsed.readFrom(input))
     {
-        error = "Δεν ήταν δυνατή η ανάγνωση του MIDI αρχείου.";
+        error = "Could not read this MIDI file. It may be damaged or invalid.";
         return false;
     }
     double musicalEndTicks = 0.0;
@@ -585,4 +742,15 @@ bool AudioEngine::restorePluginState(int slot, const juce::String& base64State, 
         plugin->setStateInformation(state.getData(), static_cast<int>(state.getSize()));
     inserts[slot].bypassed = bypassed;
     return true;
+}
+
+void AudioEngine::swapInserts(int firstSlot, int secondSlot)
+{
+    if (!juce::isPositiveAndBelow(firstSlot, numInserts)
+        || !juce::isPositiveAndBelow(secondSlot, numInserts)
+        || firstSlot == secondSlot)
+        return;
+
+    const juce::ScopedLock lock(processLock);
+    std::swap(inserts[firstSlot], inserts[secondSlot]);
 }

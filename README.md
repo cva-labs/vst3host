@@ -4,12 +4,13 @@ VST3 Player Host is a standalone audio and MIDI player for Windows and macOS, de
 
 ## Features
 
-- WAV, MP3, MID and MIDI file loading with drag and drop
+- WAV, MP3, AAC, M4A, MP4 audio, MID and MIDI file loading with drag and drop
 - Play, pause, stop, seek and repeat
 - Live audio input through ASIO on Windows and CoreAudio on macOS
 - Hardware MIDI input and an on-screen MIDI keyboard
 - Mono input option
 - Four serial VST3 effect or instrument inserts
+- Drag-and-drop insert reordering that preserves plug-in state and bypass settings
 - Native plug-in editors, bypass and clear controls
 - Manufacturer-grouped VST3 browser with instruments highlighted separately
 - Full scan and scan-new-only modes with a persistent plug-in cache

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(VST3PlayerHost VERSION 1.0.0 LANGUAGES C CXX)
+project(VST3PlayerHost VERSION 1.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -42,11 +42,13 @@ target_sources(VST3PlayerHost PRIVATE
 
 if (WIN32)
     target_include_directories(VST3PlayerHost PRIVATE ${asiosdk_SOURCE_DIR}/common)
+    target_link_libraries(VST3PlayerHost PRIVATE mfplat mfreadwrite mfuuid ole32)
 endif()
 
 target_compile_definitions(VST3PlayerHost PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
+    JUCE_USE_MP3AUDIOFORMAT=1
     JUCE_PLUGINHOST_VST3=1
     $<$<PLATFORM_ID:Windows>:JUCE_ASIO=1>
     JUCE_DISPLAY_SPLASH_SCREEN=0

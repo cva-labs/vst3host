@@ -15,6 +15,16 @@ juce::String vst3ContainerPath(const juce::String& path)
 }
 }
 
+void MainComponent::InsertDragButton::mouseDrag(const juce::MouseEvent& event)
+{
+    juce::TextButton::mouseDrag(event);
+    if (slot < 0 || event.getDistanceFromDragStart() < 6) return;
+    if (auto* container = juce::DragAndDropContainer::findParentDragContainerFor(this);
+        container != nullptr && !container->isDragAndDropActive())
+        container->startDragging("insert:" + juce::String(slot), this, juce::ScaledImage(),
+                                 false, nullptr, &event.source);
+}
+
 void MainComponent::PluginMenuLookAndFeel::drawButtonBackground(
     juce::Graphics& g, juce::Button& button, const juce::Colour&, bool highlighted, bool down)
 {
@@ -385,7 +395,7 @@ MainComponent::MainComponent()
     for (auto* c : mainControls)
         addAndMakeVisible(c);
 
-    fileLabel.setText("Drop an MP3/WAV/MIDI here", juce::dontSendNotification);
+    fileLabel.setText("Drop audio/MIDI here", juce::dontSendNotification);
     fileLabel.setJustificationType(juce::Justification::centred);
     fileLabel.setColour(juce::Label::textColourId, juce::Colour(0xffe5e6e2));
     fileLabel.setFont(juce::FontOptions(19.0f).withName("Bahnschrift"));
@@ -487,6 +497,7 @@ MainComponent::MainComponent()
 
     for (int i = 0; i < AudioEngine::numInserts; ++i)
     {
+        insertButtons[i].setInsertSlot(i);
         insertButtons[i].setButtonText("Empty");
         pluginSelectors[i].setButtonText("Select VST3...");
         pluginSelectors[i].setLookAndFeel(&pluginMenuLookAndFeel);
@@ -595,7 +606,7 @@ void MainComponent::paint(juce::Graphics& g)
     g.drawText("FREE", 1260, 62, 104, 48, juce::Justification::centred);
     g.setColour(juce::Colour(0xffd8dcda));
     g.setFont(juce::FontOptions(17.0f).withName("Bahnschrift"));
-    g.drawText("v1.0.0", 1395, 58, 100, 56, juce::Justification::centred);
+    g.drawText("v1.1.0", 1395, 58, 100, 56, juce::Justification::centred);
 
     const auto panel = [&](juce::Rectangle<float> r)
     {
@@ -624,6 +635,13 @@ void MainComponent::paint(juce::Graphics& g)
             g.drawHorizontalLine(y - 8, 68.0f, 1145.0f);
             g.setColour(juce::Colour(0xffeeeeea));
         }
+    }
+
+    if (juce::isPositiveAndBelow(dragTargetSlot, AudioEngine::numInserts))
+    {
+        const int y = 503 + dragTargetSlot * 63;
+        g.setColour(juce::Colour(0xff65e887));
+        g.drawRoundedRectangle(64.0f, (float) y, 1085.0f, 55.0f, 6.0f, 2.0f);
     }
 
     g.setFont(juce::FontOptions(15.0f).withName("Bahnschrift"));
@@ -709,7 +727,7 @@ void MainComponent::resized()
 bool MainComponent::isInterestedInFileDrag(const juce::StringArray& files)
 {
     for (const auto& p : files)
-        if (juce::File(p).hasFileExtension("wav;mp3;mid;midi")) return true;
+        if (juce::File(p).hasFileExtension("wav;mp3;m4a;mp4;aac;mid;midi")) return true;
     return false;
 }
 
@@ -738,9 +756,69 @@ void MainComponent::timerCallback()
     repaint();
 }
 
+int MainComponent::insertSlotAt(juce::Point<int> position) const
+{
+    for (int slot = 0; slot < AudioEngine::numInserts; ++slot)
+    {
+        auto row = insertButtons[slot].getBounds()
+                       .getUnion(clearButtons[slot].getBounds())
+                       .expanded(12, 7);
+        if (row.contains(position)) return slot;
+    }
+    return -1;
+}
+
+bool MainComponent::isInterestedInDragSource(const SourceDetails& details)
+{
+    return details.description.toString().startsWith("insert:");
+}
+
+void MainComponent::itemDragMove(const SourceDetails& details)
+{
+    const int nextTarget = insertSlotAt(details.localPosition);
+    if (nextTarget != dragTargetSlot)
+    {
+        dragTargetSlot = nextTarget;
+        repaint();
+    }
+}
+
+void MainComponent::itemDragExit(const SourceDetails&)
+{
+    dragTargetSlot = -1;
+    repaint();
+}
+
+void MainComponent::itemDropped(const SourceDetails& details)
+{
+    const int sourceSlot = details.description.toString().fromFirstOccurrenceOf("insert:", false, false).getIntValue();
+    const int targetSlot = insertSlotAt(details.localPosition);
+    dragTargetSlot = -1;
+
+    if (!juce::isPositiveAndBelow(sourceSlot, AudioEngine::numInserts)
+        || !juce::isPositiveAndBelow(targetSlot, AudioEngine::numInserts)
+        || sourceSlot == targetSlot
+        || engine.getPlugin(sourceSlot) == nullptr
+        || pluginSlotLoading[sourceSlot] || pluginSlotLoading[targetSlot])
+    {
+        repaint();
+        return;
+    }
+
+    // Editors point directly at their plugin instances, so close both before
+    // moving the instances to their new insert positions.
+    pluginWindows[sourceSlot].reset();
+    pluginWindows[targetSlot].reset();
+    engine.swapInserts(sourceSlot, targetSlot);
+    refreshInsert(sourceSlot);
+    refreshInsert(targetSlot);
+    repaint();
+}
+
 void MainComponent::chooseAudioFile()
 {
-    chooser = std::make_unique<juce::FileChooser>("Choose an audio or MIDI file", juce::File{}, "*.wav;*.mp3;*.mid;*.midi");
+    chooser = std::make_unique<juce::FileChooser>("Choose an audio or MIDI file", juce::File{},
+                                                  "*.wav;*.mp3;*.m4a;*.mp4;*.aac;*.mid;*.midi");
     chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                          [this](const juce::FileChooser& fc) { if (fc.getResult().existsAsFile()) openAudioFile(fc.getResult()); });
 }

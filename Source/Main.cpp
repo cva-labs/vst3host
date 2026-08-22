@@ -6,7 +6,7 @@ class VST3PlayerHostApplication final : public juce::JUCEApplication
 {
 public:
     const juce::String getApplicationName() override    { return "VST3 Player Host"; }
-    const juce::String getApplicationVersion() override { return "1.0.0"; }
+    const juce::String getApplicationVersion() override { return "1.1.0"; }
     bool moreThanOneInstanceAllowed() override          { return true; }
 
     void initialise(const juce::String&) override
@@ -23,6 +23,17 @@ public:
             juce::StringArray identifiers;
             for (int i = 2; i < arguments.size(); ++i) identifiers.add(arguments[i]);
             scanPlugins(identifiers, juce::File(arguments[1]));
+            juce::MessageManager::callAsync([this] { quit(); });
+            return;
+        }
+        if (arguments.size() >= 3 && arguments[0] == "--test-audio")
+        {
+            AudioEngine engine;
+            juce::String error;
+            const bool loaded = engine.loadAudioFile(juce::File(arguments[1]), error);
+            juce::File(arguments[2]).replaceWithText(loaded
+                ? "OK length=" + juce::String(engine.getLength(), 3)
+                : "ERROR " + error);
             juce::MessageManager::callAsync([this] { quit(); });
             return;
         }

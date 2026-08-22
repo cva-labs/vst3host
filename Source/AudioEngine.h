@@ -49,6 +49,7 @@ public:
     juce::AudioProcessor* getPlugin(int slot) const;
     juce::var createRackPreset() const;
     bool restorePluginState(int slot, const juce::String& base64State, bool bypassed);
+    void swapInserts(int firstSlot, int secondSlot);
 
 private:
     class HostPlayHead final : public juce::AudioPlayHead

@@ -7,6 +7,8 @@
 
 class MainComponent final : public juce::AudioAppComponent,
                             public juce::FileDragAndDropTarget,
+                            public juce::DragAndDropContainer,
+                            public juce::DragAndDropTarget,
                             private juce::MidiInputCallback,
                             private juce::Timer
 {
@@ -21,12 +23,24 @@ public:
     void resized() override;
     bool isInterestedInFileDrag(const juce::StringArray&) override;
     void filesDropped(const juce::StringArray&, int, int) override;
+    bool isInterestedInDragSource(const SourceDetails&) override;
+    void itemDragMove(const SourceDetails&) override;
+    void itemDragExit(const SourceDetails&) override;
+    void itemDropped(const SourceDetails&) override;
 
 private:
     class PluginWindow;
     class StereoMeter;
     class PluginScanThread;
     class PluginFolderCheckThread;
+    class InsertDragButton final : public juce::TextButton
+    {
+    public:
+        void setInsertSlot(int newSlot) { slot = newSlot; }
+        void mouseDrag(const juce::MouseEvent&) override;
+    private:
+        int slot = -1;
+    };
     class PluginMenuLookAndFeel final : public juce::LookAndFeel_V4
     {
     public:
@@ -74,6 +88,7 @@ private:
     bool writePresetLibrary(const juce::var&) const;
     static juce::File getPresetLibraryFile();
     void refreshInsert(int slot);
+    int insertSlotAt(juce::Point<int>) const;
     static juce::String timeText(double seconds);
 
     AudioEngine engine;
@@ -98,7 +113,7 @@ private:
     juce::MidiKeyboardState midiKeyboardState;
     juce::MidiKeyboardComponent midiKeyboard { midiKeyboardState,
                                                 juce::MidiKeyboardComponent::horizontalKeyboard };
-    juce::TextButton insertButtons[AudioEngine::numInserts];
+    InsertDragButton insertButtons[AudioEngine::numInserts];
     juce::TextButton pluginSelectors[AudioEngine::numInserts];
     juce::ToggleButton bypassButtons[AudioEngine::numInserts];
     juce::TextButton clearButtons[AudioEngine::numInserts];
@@ -117,6 +132,7 @@ private:
     float cpuLoadPercent = 0.0f;
     float ramLoadPercent = 0.0f;
     bool keyboardVisible = false;
+    int dragTargetSlot = -1;
     juce::StringArray registeredMidiInputs;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
