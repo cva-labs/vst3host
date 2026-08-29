@@ -1,0 +1,76 @@
+name: Release Windows and macOS
+
+on:
+  push:
+    tags: [ "v*" ]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure Windows x64
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+      - name: Build Release
+        run: cmake --build build --config Release --parallel 4
+      - name: Package
+        shell: pwsh
+        run: |
+          $output = "build/VST3PlayerHost_artefacts/Release/VST3 Player Host.exe"
+          if (-not (Test-Path -LiteralPath $output)) { throw "Application was not generated: $output" }
+          Compress-Archive -LiteralPath $output -DestinationPath "VST3-Player-Host-${{ github.ref_name }}-Windows-x64.zip" -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: VST3-Player-Host-${{ github.ref_name }}-Windows-x64.zip
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure macOS Universal
+        run: |
+          cmake -S . -B build-macos -G Xcode \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+      - name: Build Release
+        run: cmake --build build-macos --config Release --parallel 4
+      - name: Ad-hoc sign and package
+        run: |
+          APP="build-macos/VST3PlayerHost_artefacts/Release/VST3 Player Host.app"
+          codesign --force --deep --sign - "$APP"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "VST3-Player-Host-${{ github.ref_name }}-macOS-Universal.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: VST3-Player-Host-${{ github.ref_name }}-macOS-Universal.zip
+
+  publish:
+    needs: [ windows, macos ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Prepare release notes from changelog
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v version="$VERSION" '
+            $0 ~ "^## \\[" version "\\]" { found=1; next }
+            found && /^## \\[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          test -s release-notes.md
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release-assets/*.zip \
+            --title "VST3 Player Host ${GITHUB_REF_NAME#v}" \
+            --notes-file release-notes.md
