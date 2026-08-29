@@ -61,11 +61,16 @@ jobs:
       - name: Prepare release notes from changelog
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          awk -v version="$VERSION" '
-            $0 ~ "^## \\[" version "\\]" { found=1; next }
-            found && /^## \\[/ { exit }
-            found { print }
-          ' CHANGELOG.md > release-notes.md
+          python3 - "$VERSION" <<'PY'
+          import pathlib
+          import sys
+
+          version = sys.argv[1]
+          lines = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+          start = next(i for i, line in enumerate(lines) if line.startswith(f"## [{version}]")) + 1
+          end = next((i for i in range(start, len(lines)) if lines[i].startswith("## [")), len(lines))
+          pathlib.Path("release-notes.md").write_text("\n".join(lines[start:end]).strip() + "\n", encoding="utf-8")
+          PY
           test -s release-notes.md
       - name: Publish GitHub release
         env:
