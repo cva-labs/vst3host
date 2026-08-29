@@ -645,13 +645,24 @@ void AudioEngine::loadPlugin(int slot, const juce::PluginDescription& descriptio
             writePluginDiagnostic(instance->getName() + " | prepare completed | in="
                                   + juce::String(instance->getTotalNumInputChannels())
                                   + " out=" + juce::String(instance->getTotalNumOutputChannels()));
+            std::unique_ptr<juce::AudioPluginInstance> retiredPlugin;
             {
                 const juce::ScopedLock lock(processLock);
-                if (inserts[slot].plugin != nullptr)
-                    inserts[slot].plugin->releaseResources();
+                retiredPlugin = std::move(inserts[slot].plugin);
                 inserts[slot].plugin = std::move(instance);
                 inserts[slot].bypassed = false;
                 inserts[slot].firstProcessPending = true;
+            }
+
+            // Never call into or destroy a hosted plugin while holding processLock.
+            // A VST3 teardown may wait for its audio-side work to finish; holding the
+            // lock here would prevent the audio callback from reaching that point.
+            if (retiredPlugin != nullptr)
+            {
+                retiredPlugin->setPlayHead(nullptr);
+                retiredPlugin->suspendProcessing(true);
+                retiredPlugin->releaseResources();
+                retiredPlugin.reset();
             }
             completion({});
         });
@@ -660,9 +671,32 @@ void AudioEngine::loadPlugin(int slot, const juce::PluginDescription& descriptio
 void AudioEngine::clearPlugin(int slot)
 {
     if (!juce::isPositiveAndBelow(slot, numInserts)) return;
-    const juce::ScopedLock lock(processLock);
-    if (inserts[slot].plugin != nullptr) inserts[slot].plugin->releaseResources();
-    inserts[slot].plugin.reset();
+
+    writePluginDiagnostic("CLEAR slot " + juce::String(slot + 1) + " | engine begin");
+    std::unique_ptr<juce::AudioPluginInstance> retiredPlugin;
+    {
+        writePluginDiagnostic("CLEAR slot " + juce::String(slot + 1) + " | waiting processLock");
+        const juce::ScopedLock lock(processLock);
+        writePluginDiagnostic("CLEAR slot " + juce::String(slot + 1) + " | processLock acquired");
+        retiredPlugin = std::move(inserts[slot].plugin);
+        inserts[slot].bypassed = false;
+        inserts[slot].firstProcessPending = false;
+    }
+    writePluginDiagnostic("CLEAR slot " + juce::String(slot + 1) + " | processLock released");
+
+    if (retiredPlugin != nullptr)
+    {
+        writePluginDiagnostic("CLEAR | setPlayHead null begin");
+        retiredPlugin->setPlayHead(nullptr);
+        writePluginDiagnostic("CLEAR | setPlayHead null done; suspend begin");
+        retiredPlugin->suspendProcessing(true);
+        writePluginDiagnostic("CLEAR | suspend done; releaseResources begin");
+        retiredPlugin->releaseResources();
+        writePluginDiagnostic("CLEAR | releaseResources done; retain until host shutdown begin");
+        retiredPlugins.push_back(std::move(retiredPlugin));
+        writePluginDiagnostic("CLEAR | retained until host shutdown");
+    }
+    writePluginDiagnostic("CLEAR slot " + juce::String(slot + 1) + " | engine complete");
 }
 
 void AudioEngine::setPluginBypassed(int slot, bool bypassed)

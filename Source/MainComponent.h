@@ -88,6 +88,7 @@ private:
     bool writePresetLibrary(const juce::var&) const;
     static juce::File getPresetLibraryFile();
     void refreshInsert(int slot);
+    void clearInsert(int slot);
     int insertSlotAt(juce::Point<int>) const;
     static juce::String timeText(double seconds);
 
@@ -122,12 +123,14 @@ private:
     std::unique_ptr<juce::AlertWindow> presetNameDialog;
     std::unique_ptr<juce::AlertWindow> presetDeleteDialog;
     std::unique_ptr<PluginWindow> pluginWindows[AudioEngine::numInserts];
+    std::vector<std::unique_ptr<PluginWindow>> retiredPluginWindows;
     std::unique_ptr<PluginScanThread> pluginScanThread;
     std::unique_ptr<PluginFolderCheckThread> pluginFolderCheckThread;
     std::vector<juce::PluginDescription> scannedPlugins;
     PluginMenuLookAndFeel pluginMenuLookAndFeel;
     juce::Image logoImage;
     bool pluginSlotLoading[AudioEngine::numInserts] {};
+    int midiDeviceRefreshTicks = 0;
     bool draggingPosition = false;
     float cpuLoadPercent = 0.0f;
     float ramLoadPercent = 0.0f;

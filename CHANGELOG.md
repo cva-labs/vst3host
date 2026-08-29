@@ -2,6 +2,23 @@
 
 All notable changes to VST3 Player Host are documented in this file.
 
+## [1.2.0] - 2026-08-29
+
+### Added
+
+- Displayed the application version in the upper-right corner of the interface.
+
+### Changed
+
+- Reduced MIDI device enumeration frequency to keep the interface responsive.
+
+### Fixed
+
+- Fixed a host freeze when clearing an insert containing a VST3 plug-in with a native editor.
+- Removed plug-ins from the real-time audio chain before running their shutdown sequence.
+- Avoided destroying plug-ins while holding the audio processing lock.
+- Made Clear Insert update its controls immediately and consistently from both the button and plug-in menu.
+
 ## [1.1.0] - 2026-08-22
 
 ### Added

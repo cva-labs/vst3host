@@ -509,7 +509,14 @@ MainComponent::MainComponent()
         insertButtons[i].onClick = [this, i] { showPluginEditor(i); };
         pluginSelectors[i].onClick = [this, i] { showPluginMenu(i); };
         bypassButtons[i].onClick = [this, i] { engine.setPluginBypassed(i, bypassButtons[i].getToggleState()); };
-        clearButtons[i].onClick = [this, i] { pluginWindows[i].reset(); engine.clearPlugin(i); refreshInsert(i); };
+        clearButtons[i].onClick = [safeThis = juce::Component::SafePointer<MainComponent> (this), i]
+        {
+            juce::MessageManager::callAsync ([safeThis, i]
+            {
+                if (safeThis == nullptr) return;
+                safeThis->clearInsert(i);
+            });
+        };
         refreshInsert(i);
     }
 
@@ -606,7 +613,8 @@ void MainComponent::paint(juce::Graphics& g)
     g.drawText("FREE", 1260, 62, 104, 48, juce::Justification::centred);
     g.setColour(juce::Colour(0xffd8dcda));
     g.setFont(juce::FontOptions(17.0f).withName("Bahnschrift"));
-    g.drawText("v1.1.0", 1395, 58, 100, 56, juce::Justification::centred);
+    g.drawText("v" + juce::String(ProjectInfo::versionString), 1395, 58, 100, 56,
+               juce::Justification::centred);
 
     const auto panel = [&](juce::Rectangle<float> r)
     {
@@ -738,7 +746,13 @@ void MainComponent::filesDropped(const juce::StringArray& files, int, int)
 
 void MainComponent::timerCallback()
 {
-    syncMidiInputs();
+    // Enumerating system MIDI devices can enter OS/driver code and must not run at
+    // the 30 Hz UI-meter rate. Refresh roughly once every two seconds instead.
+    if (++midiDeviceRefreshTicks >= 60)
+    {
+        midiDeviceRefreshTicks = 0;
+        syncMidiInputs();
+    }
     const auto length = engine.getLength();
     positionSlider.setRange(0.0, juce::jmax(0.001, length), 0.001);
     if (!draggingPosition) positionSlider.setValue(engine.getPosition(), juce::dontSendNotification);
@@ -923,9 +937,7 @@ void MainComponent::showPluginMenu(int slot)
                                 }
                                 else if (result == clearMenuId)
                                 {
-                                    safeThis->pluginWindows[slot].reset();
-                                    safeThis->engine.clearPlugin(slot);
-                                    safeThis->refreshInsert(slot);
+                                    safeThis->clearInsert(slot);
                                 }
                                 else safeThis->loadSelectedPlugin(slot, result - 1);
                             });
@@ -937,7 +949,8 @@ void MainComponent::loadSelectedPlugin(int slot, int pluginIndex)
     const auto description = scannedPlugins[static_cast<size_t>(pluginIndex)];
 
     const juce::Component::SafePointer<MainComponent> safeThis(this);
-    pluginWindows[slot].reset();
+    if (engine.getPlugin(slot) != nullptr)
+        clearInsert(slot);
     insertButtons[slot].setButtonText("Loading...");
     pluginSlotLoading[slot] = true;
     insertButtons[slot].setEnabled(false);
@@ -1419,6 +1432,24 @@ void MainComponent::refreshInsert(int slot)
     pluginSelectors[slot].setEnabled(!scannedPlugins.empty());
     bypassButtons[slot].setEnabled(loaded); clearButtons[slot].setEnabled(loaded);
     bypassButtons[slot].setToggleState(engine.isPluginBypassed(slot), juce::dontSendNotification);
+    repaint();
+}
+
+void MainComponent::clearInsert(int slot)
+{
+    if (!juce::isPositiveAndBelow(slot, AudioEngine::numInserts)) return;
+
+    // Keep the native editor and its processor paired until application shutdown.
+    // A few VST3 editors leave native message-loop work pending when destroyed from
+    // their Clear button callback, which can otherwise freeze the host UI.
+    if (pluginWindows[slot] != nullptr)
+    {
+        pluginWindows[slot]->setVisible(false);
+        retiredPluginWindows.push_back(std::move(pluginWindows[slot]));
+    }
+
+    engine.clearPlugin(slot);
+    refreshInsert(slot);
 }
 
 juce::String MainComponent::timeText(double seconds)

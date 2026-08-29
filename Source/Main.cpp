@@ -6,7 +6,7 @@ class VST3PlayerHostApplication final : public juce::JUCEApplication
 {
 public:
     const juce::String getApplicationName() override    { return "VST3 Player Host"; }
-    const juce::String getApplicationVersion() override { return "1.1.0"; }
+    const juce::String getApplicationVersion() override { return ProjectInfo::versionString; }
     bool moreThanOneInstanceAllowed() override          { return true; }
 
     void initialise(const juce::String&) override

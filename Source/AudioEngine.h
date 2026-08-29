@@ -2,6 +2,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <vector>
 
 class AudioEngine final : public juce::AudioSource
 {
@@ -74,6 +75,10 @@ private:
     juce::File currentAudioFile;
     juce::AudioTransportSource transport;
     Insert inserts[numInserts];
+    // Some VST3 editors install native message-loop hooks which are only safe to
+    // tear down while the host itself is shutting down.  Cleared instances are
+    // disconnected from audio immediately and retained until that point.
+    std::vector<std::unique_ptr<juce::AudioPluginInstance>> retiredPlugins;
     mutable juce::CriticalSection processLock;
     juce::AudioBuffer<float> workBuffer;
     juce::MidiBuffer midi;
