@@ -562,6 +562,16 @@ MainComponent::~MainComponent()
         pluginFolderCheckThread->stopThread(3000);
         pluginFolderCheckThread.reset();
     }
+
+    // These windows belong to VST3 instances already removed from the audio
+    // chain by Clear Insert.  A small number of plug-ins deadlock if their
+    // native editor is destroyed during host shutdown.  Relinquish ownership
+    // here and let the operating system reclaim the process resources on exit.
+    // The windows have already been hidden, so this does not retain visible UI.
+    for (auto& window : retiredPluginWindows)
+        window.release();
+    retiredPluginWindows.clear();
+
     for (auto& window : pluginWindows)
         window.reset();
     for (auto& selector : pluginSelectors)

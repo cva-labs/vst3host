@@ -18,6 +18,7 @@ All notable changes to VST3 Player Host are documented in this file.
 - Removed plug-ins from the real-time audio chain before running their shutdown sequence.
 - Avoided destroying plug-ins while holding the audio processing lock.
 - Made Clear Insert update its controls immediately and consistently from both the button and plug-in menu.
+- Prevented quarantined VST3 editors from blocking final host process termination after Clear Insert.
 
 ## [1.1.0] - 2026-08-22
 

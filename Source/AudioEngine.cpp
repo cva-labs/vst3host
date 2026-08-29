@@ -194,6 +194,15 @@ AudioEngine::~AudioEngine()
 {
     transport.setSource(nullptr);
     releaseResources();
+
+    // Matching native editors are deliberately abandoned by MainComponent at
+    // process shutdown.  Do not invoke a second plug-in teardown here: the
+    // problematic VST3 may otherwise leave the host alive as a background
+    // process.  The OS reclaims these already-disconnected objects immediately
+    // when the application exits.
+    for (auto& plugin : retiredPlugins)
+        plugin.release();
+    retiredPlugins.clear();
 }
 
 void AudioEngine::prepareToPlay(int blockSize, double sampleRate)
