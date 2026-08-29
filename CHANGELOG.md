@@ -2,6 +2,13 @@
 
 All notable changes to VST3 Player Host are documented in this file.
 
+## [1.1.1] - 2026-08-29
+
+### Fixed
+
+- Clearing an insert now also resets its bypass state and immediately removes the bypass check mark.
+- Clearing an insert now resets its pending first-process state.
+
 ## [1.1.0] - 2026-08-22
 
 ### Added

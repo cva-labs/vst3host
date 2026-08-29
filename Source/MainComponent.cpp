@@ -606,7 +606,7 @@ void MainComponent::paint(juce::Graphics& g)
     g.drawText("FREE", 1260, 62, 104, 48, juce::Justification::centred);
     g.setColour(juce::Colour(0xffd8dcda));
     g.setFont(juce::FontOptions(17.0f).withName("Bahnschrift"));
-    g.drawText("v1.1.0", 1395, 58, 100, 56, juce::Justification::centred);
+    g.drawText("v1.1.1", 1395, 58, 100, 56, juce::Justification::centred);
 
     const auto panel = [&](juce::Rectangle<float> r)
     {

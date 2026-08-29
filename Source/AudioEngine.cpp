@@ -663,6 +663,8 @@ void AudioEngine::clearPlugin(int slot)
     const juce::ScopedLock lock(processLock);
     if (inserts[slot].plugin != nullptr) inserts[slot].plugin->releaseResources();
     inserts[slot].plugin.reset();
+    inserts[slot].bypassed = false;
+    inserts[slot].firstProcessPending = false;
 }
 
 void AudioEngine::setPluginBypassed(int slot, bool bypassed)

@@ -7,7 +7,7 @@ Release builds use these exact third-party revisions:
 - JUCE 8.0.10: `3af3ce009f6a02f6fa651008fffb5b41743a9fab`
 - Steinberg ASIO SDK: `496a0765b8bb9c26f764f22f9a9712a937177db2`
 
-The release asset named `VST3-Player-Host-v1.1.0-Complete-Corresponding-Source.zip` contains:
+The release asset named `VST3-Player-Host-v1.1.1-Complete-Corresponding-Source.zip` contains:
 
 - The complete VST3 Player Host source and build scripts.
 - The complete JUCE source at the revision above.
