@@ -79,7 +79,10 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release edit "$GITHUB_REF_NAME" \
               --title "VST3 Player Host ${GITHUB_REF_NAME#v}" \
-              --notes-file release-notes.md
+              --notes-file release-notes.md \
+              --draft=false \
+              --prerelease=false \
+              --target "$GITHUB_SHA"
             gh release upload "$GITHUB_REF_NAME" release-assets/*.zip --clobber
           else
             gh release create "$GITHUB_REF_NAME" release-assets/*.zip \
