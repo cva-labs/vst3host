@@ -95,6 +95,7 @@ private:
     AudioEngine engine;
     juce::TextButton openButton { "Load audio" }, playButton { "Play" }, stopButton { "Stop" };
     juce::ToggleButton repeatButton { "Repeat" };
+    juce::ToggleButton autoStartButton { "Autostart" };
     juce::ToggleButton liveInputButton { "Live input" };
     juce::ToggleButton monoInputButton { "Mono" };
     juce::TextButton audioSettingsButton { "Audio settings" };

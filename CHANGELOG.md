@@ -2,6 +2,13 @@
 
 All notable changes to VST3 Player Host are documented in this file.
 
+## [1.2.1] - 2026-09-05
+
+### Added
+
+- Added an Autostart toggle to the right of Repeat. When enabled, loading any audio or MIDI file (drag and drop or file picker) or selecting a rack preset starts playback automatically.
+- Rack presets now store the autostart preference and restore it on load; presets saved before this version keep the current setting.
+
 ## [1.2.0] - 2026-08-29
 
 ### Added

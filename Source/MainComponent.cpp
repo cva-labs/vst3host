@@ -384,9 +384,9 @@ MainComponent::MainComponent()
     setSize(juce::roundToInt(designWidth * initialScale),
             juce::roundToInt(designHeight * initialScale));
 
-    const std::array<juce::Component*, 25> mainControls {
+    const std::array<juce::Component*, 26> mainControls {
         &openButton, &playButton, &stopButton, &fileLabel,
-        &timeLabel, &positionSlider, &gainSlider, &gainLabel, &repeatButton,
+        &timeLabel, &positionSlider, &gainSlider, &gainLabel, &repeatButton, &autoStartButton,
         &liveInputButton, &monoInputButton, &audioSettingsButton,
         &savePresetButton, &deletePresetButton, &presetBox, &scanPluginsButton, &scanNewPluginsButton,
         &oversamplingBox, &bufferSizeBox, &midiInputBox, &autoSavePresetButton, &confirmOnLoadButton,
@@ -714,7 +714,7 @@ void MainComponent::resized()
     place(audioSettingsButton, 950, 250, 190, 54);
     place(positionSlider, 70, 330, 890, 34); place(timeLabel, 992, 326, 145, 40);
     place(playButton, 70, 377, 150, 48); place(stopButton, 238, 377, 140, 48);
-    place(repeatButton, 442, 377, 130, 48);
+    place(repeatButton, 442, 377, 130, 48); place(autoStartButton, 590, 377, 140, 48);
     place(gainLabel, 850, 375, 85, 48); place(gainSlider, 935, 373, 205, 52);
     place(*inputMeter, 1205, 180, 119, 654); place(*outputMeter, 1349, 180, 119, 654);
     place(muteButton, 1242, 874, 175, 54);
@@ -855,6 +855,10 @@ void MainComponent::openAudioFile(const juce::File& file)
     {
         engine.setLooping(repeatButton.getToggleState());
         fileLabel.setText(file.getFileName(), juce::dontSendNotification);
+        // Autostart: begin playback as soon as a file (or a preset source) loads.
+        // Live input bypasses the transport, so playback only applies to file mode.
+        if (autoStartButton.getToggleState() && !liveInputButton.getToggleState())
+            engine.play();
     }
     else juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "File error", error);
 }
@@ -1230,6 +1234,7 @@ juce::var MainComponent::createFullPreset() const
     object->setProperty("audioFile", engine.getLoadedAudioFile().getFullPathName());
     object->setProperty("monoInput", monoInputButton.getToggleState());
     object->setProperty("repeat", repeatButton.getToggleState());
+    object->setProperty("autoStart", autoStartButton.getToggleState());
     object->setProperty("outputGainDb", gainSlider.getValue());
     if (auto state = deviceManager.createStateXml())
         object->setProperty("audioDeviceState", state->toString());
@@ -1402,6 +1407,11 @@ void MainComponent::restoreSourceFromPreset(const juce::var& preset)
     }
 
     const bool repeat = static_cast<bool>(preset["repeat"]);
+    // Presets saved before the autostart option have no property; keep the
+    // current toggle state in that case instead of forcing it off.
+    const bool autoStart = preset.hasProperty("autoStart")
+                            ? static_cast<bool>(preset["autoStart"])
+                            : autoStartButton.getToggleState();
     const bool mono = static_cast<bool>(preset["monoInput"]);
     const bool live = preset["sourceMode"].toString() == "live";
     const double gainDb = preset.hasProperty("outputGainDb")
@@ -1409,6 +1419,7 @@ void MainComponent::restoreSourceFromPreset(const juce::var& preset)
 
     repeatButton.setToggleState(repeat, juce::dontSendNotification);
     engine.setLooping(repeat);
+    autoStartButton.setToggleState(autoStart, juce::dontSendNotification);
     monoInputButton.setToggleState(mono, juce::dontSendNotification);
     monoInputButton.setEnabled(live);
     engine.setMonoInput(mono);
