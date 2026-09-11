@@ -2,6 +2,18 @@
 
 All notable changes to VST3 Player Host are documented in this file.
 
+## [1.3.0] - 2026-09-11
+
+### Added
+
+- Chained MIDI routing between inserts: outgoing MIDI events produced by a plug-in (for example a MIDI generator such as HandScaleUniverse) are now forwarded to every later insert slot, so a MIDI-only plug-in can drive a synthesiser loaded after it. Each insert still receives an independent copy of the host MIDI input plus the accumulated output of the earlier slots.
+- Optional external MIDI output port: `AudioEngine::setMidiOutputDevice` opens a MIDI output device (hardware or virtual, such as loopMIDI) and streams plug-in-generated MIDI to it; pass an empty identifier to close it. Ownership is managed on the message thread and the audio thread reads the pointer atomically.
+- First-process diagnostics now report how many MIDI events a plug-in emitted in its first processed block ("MIDI out events in first block: N"), making MIDI-out plug-ins easy to verify.
+
+### Changed
+
+- The insert chain now treats the events remaining in a plug-in's MIDI buffer after `processBlock` as the plug-in's MIDI output, matching the VST3 hosting semantics of the JUCE wrapper (the buffer contents are replaced by the plug-in's outgoing events).
+
 ## [1.2.1] - 2026-09-05
 
 ### Added

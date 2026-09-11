@@ -41,6 +41,11 @@ public:
     void setMidiKeyboardState(juce::MidiKeyboardState* state) { midiKeyboardState = state; }
     void addIncomingMidiMessage(const juce::MidiMessage& message) { midiCollector.addMessageToQueue(message); }
 
+    // External MIDI out port for plugin-generated MIDI (e.g. HandScaleUniverse chords).
+    // Pass an empty identifier to close it. Call from the message thread.
+    void setMidiOutputDevice(const juce::String& deviceIdentifier);
+    bool isMidiOutputOpen() const { return midiOutput.load() != nullptr; }
+
     void loadPlugin(int slot, const juce::File&, std::function<void(juce::String)> completion);
     void loadPlugin(int slot, const juce::PluginDescription&, std::function<void(juce::String)> completion);
     void clearPlugin(int slot);
@@ -102,6 +107,9 @@ private:
     std::atomic<float> outputPeaks[2] {};
     std::atomic<bool> inputOverload { false };
     std::atomic<bool> outputOverload { false };
+    // Owned on the message thread; the audio thread only reads the raw pointer.
+    std::unique_ptr<juce::MidiOutput> midiOutputOwner;
+    std::atomic<juce::MidiOutput*> midiOutput { nullptr };
 
     static void updatePeak(std::atomic<float>& destination, float value);
 

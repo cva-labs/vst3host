@@ -192,6 +192,9 @@ AudioEngine::AudioEngine()
 
 AudioEngine::~AudioEngine()
 {
+    midiOutput.store(nullptr);
+    midiOutputOwner.reset();
+
     transport.setSource(nullptr);
     releaseResources();
 
@@ -203,6 +206,27 @@ AudioEngine::~AudioEngine()
     for (auto& plugin : retiredPlugins)
         plugin.release();
     retiredPlugins.clear();
+}
+
+void AudioEngine::setMidiOutputDevice(const juce::String& deviceIdentifier)
+{
+    midiOutput.store(nullptr);
+    midiOutputOwner.reset();
+
+    if (deviceIdentifier.isEmpty())
+        return;
+
+    midiOutputOwner = juce::MidiOutput::openDevice(deviceIdentifier);
+    if (midiOutputOwner != nullptr)
+    {
+        midiOutputOwner->startBackgroundThread();
+        midiOutput.store(midiOutputOwner.get());
+        writePluginDiagnostic("External MIDI output opened: " + midiOutputOwner->getName());
+    }
+    else
+    {
+        writePluginDiagnostic("Could not open external MIDI output device");
+    }
 }
 
 void AudioEngine::prepareToPlay(int blockSize, double sampleRate)
@@ -333,6 +357,10 @@ void AudioEngine::getNextAudioBlock(const juce::AudioSourceChannelInfo& info)
     else if (hostIsPlaying)
         hostPositionSeconds += info.numSamples / currentSampleRate;
 
+    // Chained MIDI: events produced by any insert (e.g. a MIDI generator like
+    // HandScaleUniverse) are merged into the buffer every later insert receives.
+    juce::MidiBuffer chainMidiOut;
+
     for (auto& insert : inserts)
     {
         if (insert.plugin == nullptr || insert.bypassed)
@@ -341,6 +369,8 @@ void AudioEngine::getNextAudioBlock(const juce::AudioSourceChannelInfo& info)
         // Plugins are allowed to consume or rewrite their MIDI buffer. Give every insert
         // an independent copy so an earlier plugin cannot remove a held note for a later one.
         juce::MidiBuffer pluginMidi(midi);
+        pluginMidi.addEvents(chainMidiOut, 0, info.numSamples, 0);
+
         const int pluginChannels = juce::jmax(2,
                                               insert.plugin->getTotalNumInputChannels(),
                                               insert.plugin->getTotalNumOutputChannels());
@@ -358,9 +388,19 @@ void AudioEngine::getNextAudioBlock(const juce::AudioSourceChannelInfo& info)
                                   + " out=" + juce::String(insert.plugin->getTotalNumOutputChannels())
                                   + " buffer=" + juce::String(pluginChannels));
         insert.plugin->processBlock(workBuffer, pluginMidi);
+
+        // The JUCE VST3 hosting wrapper replaces the buffer contents with the plugin's
+        // outgoing MIDI events, so pluginMidi is exactly the plugin's MIDI out here.
+        if (! pluginMidi.isEmpty())
+            chainMidiOut.addEvents(pluginMidi, 0, info.numSamples, 0);
+
         if (insert.firstProcessPending)
         {
-            writePluginDiagnostic(insert.plugin->getName() + " | first process completed");
+            writePluginDiagnostic(insert.plugin->getName() + " | first process completed"
+                                  + (pluginMidi.isEmpty()
+                                         ? juce::String()
+                                         : " | MIDI out events in first block: "
+                                           + juce::String(pluginMidi.getNumEvents())));
             insert.firstProcessPending = false;
         }
 
@@ -368,6 +408,13 @@ void AudioEngine::getNextAudioBlock(const juce::AudioSourceChannelInfo& info)
             info.buffer->copyFrom(channel, info.startSample, workBuffer,
                                   channel, 0, info.numSamples);
     }
+
+    // Optional external MIDI out port for plugin-generated MIDI.
+    if (! chainMidiOut.isEmpty())
+        if (auto* midiOut = midiOutput.load())
+            midiOut->sendBlockOfMessages(chainMidiOut,
+                                         juce::Time::getMillisecondCounterHiRes(),
+                                         currentSampleRate);
 
 
     for (int channel = 0; channel < juce::jmin(2, info.buffer->getNumChannels()); ++channel)
